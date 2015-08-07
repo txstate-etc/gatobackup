@@ -9,7 +9,13 @@ Export gato sites
 This file holds the **user** and **pswd** environment
 variables that get sourced by the backup script.
 The backup user requires read access to the whole
-site.
+site. It contains the **email_addrs** variable
+that is a comma separated list list of emails that
+alerts will be sent to. And finally it holds the
+staging **urls_staging_edit**, **urls_staging_public** and
+production **urls_production_edit**, **urls_production_public**
+urls of the host from which it will export the
+site versions.
 
 **~/bin/backup.sh script**
 
