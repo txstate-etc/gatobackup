@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"io"
+	"io/ioutil"
 	"bytes"
 	"net/http"
 	"crypto/sha1"
@@ -62,8 +64,8 @@ func NewSession(s string) (*Session, error) {
 // Must get a 200 for success with no redirects.
 // curl version:
 // curl -k --silent --fail { --user "<usr>:<pwd>" | --cookie "<sessionID>" } "$url/docroot/gato/dump.jsp?repository=$repo&depth=999&path=/$path" | sort | sha1sum
-// QUESTION: Do we really need to sort the dump? Shouldn't the dump always return in the same order from request to request? For now we are not sorting; Also
-// we should have the dump be able to also generate a hash instead of us generating one; that way only the hash needs to be sent over the network.
+// We need to sort the dump, as the dump does NOT always return in the same order from request to request.
+// TODO: dump jsp file generates a hash in the header with HEAD requests, instead of us generating one; that way only the hash needs to be sent over the network.
 func (s *Session) hashDump(n *Node) (string, error) {
 	req, err := http.NewRequest("GET", s.Url + "/docroot/gato/dump.jsp?repository="+n.Repo+"&depth=999&path=/"+n.Path, nil)
 	if err != nil {
@@ -93,12 +95,20 @@ func (s *Session) hashDump(n *Node) (string, error) {
 		return "", ErrNon200StatusCode{code: res.StatusCode}
 	}
 
-	h := sha1.New()
-	if _, err = io.Copy(h, res.Body); err != nil {
+	// Hate to read all at once instead of stream to hash, but
+	// need the entire list to sort. Apparently dump.jsp can
+	// return list in a different order upon each request.
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
 		return "", err
 	}
-	hash := fmt.Sprintf("%x", h.Sum(nil))
-	return hash, nil
+	h := sha1.New()
+	lines := strings.Split(string(body), "\n")
+	sort.Strings(lines)
+	for _, l := range lines {
+		h.Write([]byte(l))
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 // Must get a 200 for success with no redirects
