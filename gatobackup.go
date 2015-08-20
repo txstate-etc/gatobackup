@@ -1,18 +1,18 @@
 package main
 
 import (
-	"runtime"
+	"bufio"
+	"errors"
 	"flag"
+	"hash/fnv"
+	"io"
 	"log"
-	"sync"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
-	"hash/fnv"
-	"bufio"
+	"sync"
 	"time"
-	"io"
-	"os"
-	"errors"
 )
 
 // Global variables filled by flag module
@@ -20,10 +20,10 @@ var (
 	sessionSplitHash bool
 	sessionGroupSize int
 	sessionQueueSize int
-	dirBase string
-	stamp string
-	cwd string
-	eSave *log.Logger // Used to save out backup errors
+	dirBase          string
+	stamp            string
+	cwd              string
+	eSave            *log.Logger // Used to save out backup errors
 )
 
 func init() {
@@ -45,16 +45,16 @@ func init() {
 
 // Return a writer that is associated with a file
 // within our datastore for the node.
-var openStore func (n *Node) (io.WriteCloser, error)
+var openStore func(n *Node) (io.WriteCloser, error)
 
 // Get hash string for hash of node dump if the
 // associated file exists or return empty string
 // if the file does not exist.
-var getHash func (n *Node) (string, error)
+var getHash func(n *Node) (string, error)
 
 // Create file and store hash string generated
 // from the node dump within it.
-var putHash func (n *Node, hash string) error
+var putHash func(n *Node, hash string) error
 
 type Backup chan *Node
 
@@ -71,9 +71,9 @@ func (b Backup) run(wg *sync.WaitGroup, s *Session, thread int) {
 		// returned in this case.
 		hashSaved, _ := getHash(node)
 		//if err != nil {
-			// log.Printf("ERROR: [%d] %s -- unable to obtain saved hash of dump -- %s", thread, node, err.Error())
-			// keep processing node as error may just be due to file did not exist.
-			// as hashSaved is an empty string this means that we will backup the node.
+		// log.Printf("ERROR: [%d] %s -- unable to obtain saved hash of dump -- %s", thread, node, err.Error())
+		// keep processing node as error may just be due to file did not exist.
+		// as hashSaved is an empty string this means that we will backup the node.
 		//}
 		// Start timer for generating hash of dump.
 		startDump := time.Now()
@@ -177,15 +177,15 @@ func queue(sss []string, ssh bool, sgs, sqs int) (qNode func(*Node), qClose func
 			bu := make(Backup, sqs)
 			bus[idx] = bu
 			for i := 0; i < sgs; i++ {
-				go bu.run(&wg, s, (idx * sgs + i))
+				go bu.run(&wg, s, (idx*sgs + i))
 			}
 		}
 		// mod of hash node name.
 		// backups[hash(node) % nss] <- node
-		qNode = func (n *Node) {
+		qNode = func(n *Node) {
 			h := fnv.New64()
 			h.Write([]byte(n.String()))
-			bus[int(h.Sum64() % uint64(nss))] <- n
+			bus[int(h.Sum64()%uint64(nss))] <- n
 		}
 		qClose = func() {
 			for _, q := range bus {
@@ -197,10 +197,10 @@ func queue(sss []string, ssh bool, sgs, sqs int) (qNode func(*Node), qClose func
 		bu := make(Backup, sqs)
 		for idx, s := range ss {
 			for i := 0; i < sgs; i++ {
-				go bu.run(&wg, s, (idx * sgs + i))
+				go bu.run(&wg, s, (idx*sgs + i))
 			}
 		}
-		qNode = func (n *Node) {
+		qNode = func(n *Node) {
 			bu <- n
 		}
 		qClose = func() {
@@ -216,15 +216,15 @@ func genPath(n *Node, base, ext string) string {
 }
 
 // WARNING: It is up to the process calling the function to close the writer.
-func openStoreFunc(dir, stamp string) (func (n *Node) (io.WriteCloser, error)) {
-	return func (n *Node) (io.WriteCloser, error) {
-		return os.Create(genPath(n, dir, ".xml" + stamp))
+func openStoreFunc(dir, stamp string) func(n *Node) (io.WriteCloser, error) {
+	return func(n *Node) (io.WriteCloser, error) {
+		return os.Create(genPath(n, dir, ".xml"+stamp))
 	}
 }
 
 // Will return an empty string if unsuccessful at retrieving the saved hash.
-func getHashFunc(dir string) (func (n *Node) (string, error)) {
-	return func (n *Node) (string, error) {
+func getHashFunc(dir string) func(n *Node) (string, error) {
+	return func(n *Node) (string, error) {
 		f, err := os.Open(genPath(n, dir, ".xml.sha1"))
 		if err != nil {
 			// TODO: may wish to determine if the file did not previously exist
@@ -232,7 +232,7 @@ func getHashFunc(dir string) (func (n *Node) (string, error)) {
 		}
 		defer f.Close()
 		// Read only 40 byte sha1 hash
-		data := make ([]byte, 40)
+		data := make([]byte, 40)
 		count, _ := f.Read(data)
 		// Return empty string instead of partial hash
 		if count != 40 {
@@ -242,8 +242,8 @@ func getHashFunc(dir string) (func (n *Node) (string, error)) {
 	}
 }
 
-func putHashFunc(dir string) (func (n *Node, hash string) error) {
-	return func (n *Node, hash string) (err error) {
+func putHashFunc(dir string) func(n *Node, hash string) error {
+	return func(n *Node, hash string) (err error) {
 		// Do NOT write out empty hash string
 		if hash == "" {
 			return nil
@@ -263,7 +263,7 @@ func putHashFunc(dir string) (func (n *Node, hash string) error) {
 		// Mimic output of sha1sum function that appends
 		// "  -\n" (without filename) when content is
 		// piped to the command.
-		_, err = f.Write([]byte(hash  + "  -\n"))
+		_, err = f.Write([]byte(hash + "  -\n"))
 		return
 	}
 }
@@ -315,7 +315,7 @@ func main() {
 	}
 
 	// Get functions
-	openStore = openStoreFunc(dirBase + "/data", stamp)
+	openStore = openStoreFunc(dirBase+"/data", stamp)
 	getHash = getHashFunc(dirBase + "/registry")
 	putHash = putHashFunc(dirBase + "/registry")
 	qNode, qClose, err := queue(flag.Args(), sessionSplitHash, sessionGroupSize, sessionQueueSize)
