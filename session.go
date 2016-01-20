@@ -78,6 +78,8 @@ func (s *Session) hashDump(n *Node) (string, error) {
 	// but it is required for all other repos; so we
 	// just include in all requests.
 	req.AddCookie(&http.Cookie{Name: s.Name, Value: s.Value, Path: "/", Domain: "txstate.edu"})
+	// Dumps can benefit from default acceptance of gzip content; As dumps are not that big
+	// we will not run into Magnolia CMS gzip 2GB size constraint issue so will allow at this point.
 	// referrer not not required for dump as gato csrfSecurity filters only apply to /.magnolia section
 	client := &http.Client{
 		CheckRedirect: noRedirectPolicyFunc,
@@ -134,10 +136,15 @@ func (s *Session) saveNode(n *Node, w io.Writer) error {
 	}
 	req.AddCookie(&http.Cookie{Name: s.Name, Value: s.Value, Path: "/", Domain: "txstate.edu"})
 	req.Header.Add("content-type", `application/x-www-form-urlencoded`)
+	// Magnolia CMS gzip responses have a 2GB limit; so do not accept gzip content to avoid this issue.
+	tr := &http.Transport{
+		DisableCompression: true,
+	}
 	// requires referrer header to pass gato csrfSecurity filters
 	req.Header.Add("referer", s.Url+"/.magnolia/pages/export.html")
 	client := &http.Client{
 		CheckRedirect: noRedirectPolicyFunc,
+		Transport:     tr,
 	}
 	res, err := client.Do(req)
 	// Always have to close body if it exists,
