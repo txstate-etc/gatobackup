@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha1"
 	"fmt"
 	"io"
@@ -127,21 +126,23 @@ func (s *Session) saveNode(n *Node, w io.Writer) error {
 	// jcr node; so even with this flag set to true, no
 	// versions will be coming over. A side benefit of
 	// this is that we immediately start to get data back.
-	body := bytes.NewBufferString("mgnlRepository=" + n.Repo + "&mgnlPath=/" + n.Path + "&ext=.xml&command=exportxml&exportxml=Export&mgnlKeepVersions=true")
+	// body := bytes.NewBufferString("mgnlRepository=" + n.Repo + "&mgnlPath=/" + n.Path + "&ext=.xml&command=exportxml&exportxml=Export&mgnlKeepVersions=true")
 
 	// gato is expecting form data so must POST with data in url encoded body.
-	req, err := http.NewRequest("POST", s.Url+"/.magnolia/pages/export.html", body)
+	// req, err := http.NewRequest("POST", s.Url+"/.magnolia/pages/export.html", body)
+	// /docroot/gato/export.jsp?repo=website&path=/testing-site-destroyer
+	req, err := http.NewRequest("GET", s.Url+"/docroot/gato/export.jsp?repo="+n.Repo+"&path=/"+n.Path, nil)
 	if err != nil {
 		return err
 	}
 	req.AddCookie(&http.Cookie{Name: s.Name, Value: s.Value, Path: "/", Domain: "txstate.edu"})
-	req.Header.Add("content-type", `application/x-www-form-urlencoded`)
+	//req.Header.Add("content-type", `application/x-www-form-urlencoded`)
 	// Magnolia CMS gzip responses have a 2GB limit; so do not accept gzip content to avoid this issue.
 	tr := &http.Transport{
 		DisableCompression: true,
 	}
 	// requires referrer header to pass gato csrfSecurity filters
-	req.Header.Add("referer", s.Url+"/.magnolia/pages/export.html")
+	//req.Header.Add("referer", s.Url+"/.magnolia/pages/export.html")
 	client := &http.Client{
 		CheckRedirect: noRedirectPolicyFunc,
 		Transport:     tr,
