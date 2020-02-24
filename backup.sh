@@ -111,22 +111,21 @@ fi
 ###############################
 # To make better use of queues we try to keep all
 # pipes full. The best way is to start with largest
-# files and finish with the smallest ones; thus
-# feed node list to backup process in following order:
-# websites, dms, config/modules/gato, config/modules/dms, userroles, users, usergroups
+# workspace files and finish with the smallest ones;
+# thus feed node list to backup process in following order:
+# websites, userroles, users, usergroups, gatoapps, resources
 timestamp=$(date -I)
 # Start fresh backup of repo, i.e. Remove all previous markers of completed backups
 rm -f "$wdir/"{list.failed,save.failed,files-removed}
 mkdir -p "$wdir/log" "$wdir/removed"
-#for repo in website dms config userroles users usergroups; do
-for repo in website dam config userroles users usergroups; do
+for repo in website userroles users usergroups gatoapps resources; do
   mkdir -p "$wdir/registry/$repo" "$wdir/data/$repo"
   rm -f "$wdir/registry/$repo/"*.xml.bu
 done
-#for rdp in 'website:1:/,page' 'dms:1:/,content' 'config:2:/modules/gato,\(contentNode|content\)' 'config:2:/modules/dms,\(contentNode|content\)' 'userroles:1:/,role' 'users:1:/admin,user' 'usergroups:1:/,group'; do
-# TODO: figure out how to get module list to backup
-#for rdp in 'website:1:/,page' 'dam:1:/,folder' 'dam:1:/banner-images,folder' 'config:2:/modules/gato,\(contentNode|content\)' 'config:2:/modules/dms,\(contentNode|content\)' 'userroles:1:/,role' 'users:1:/admin,user' 'usergroups:1:/,group'; do
-for rdp in 'website:1:/,page' 'dam:1:/,folder' 'dam:1:/banner-images,folder' 'userroles:1:/,role' 'users:1:/admin,user' 'usergroups:1:/,group'; do
+# TODO: figure out how to get workspace list to backup
+# Remove dam because files are too large, let pagers application download those per node.
+#for rdp in 'website:1:/,page' 'dam:1:/,folder' 'dms:1:/,content' 'config:2:/modules/gato,\(contentNode|content\)' 'config:2:/modules/dms,\(contentNode|content\)' 'userroles:1:/,role' 'users:1:/admin,user' 'usergroups:1:/,group'; do
+for rdp in 'website:1:/,page' 'userroles:1:/,role' 'users:1:/admin,user' 'usergroups:1:/,group' 'gatoapps:1:/,content' 'resources:1:/,folder'; do
   # Generate list of nodes to backup
   repo="${rdp%%:*}"
   path="${rdp##*:}"
@@ -139,20 +138,20 @@ for rdp in 'website:1:/,page' 'dam:1:/,folder' 'dam:1:/banner-images,folder' 'us
   url_session="${sessions[$sessionidx]}"
   url="${url_session%%,*}"
   session="${url_session##*,}"
+  # Add non-page node type website content.
   if [ "$repo" == 'website' ]; then
     echo 'website.homepage-data'
+    echo 'website.global-data'
   fi
   # Verify curl succeeded, otherwise backup is incomplete and potentially left in a bad state.
   ( curl --silent --fail --cookie "$session" "$url/docroot/gato/dump.jsp?depth=$depth&path=$path&repository=$repo"
     if [ $? -ne 0 ]; then touch "$wdir/list.failed"; fi ) |
-  sed -ne 's_/_._g; s_^\.\([[:alnum:]._-]\+\)\[mgnl:'"$search"'\]$_'"$repo"'.\1_p' |
-  grep -v '^dam.banner-images$'
+  sed -ne 's_/_._g; s_^\.\([[:alnum:]._-]\+\)\[mgnl:'"$search"'\]$_'"$repo"'.\1_p'
 done |
 while read node; do
   # Create node marker file to help find removed nodes.
   ########### uncomment to test out bad nodes
   #if [ "$node" == "website.testing-site-destroyer" ]; then echo "website.bad-test"; fi
-  #if [ "$node" == "website.testing-site-destroyer" ]; then echo "websitebad-test"; fi
   ###########
   repo="${node%%.*}"
   name="${node#*.}"
@@ -190,9 +189,9 @@ echo "`date +'%F %T'` INFO: Start locating removed nodes."
 #   not be created for those nodes. We thus
 #   cannot determine if nodes with no marker
 #   have been removed.
-# Only checking dms and website repos.
+# Only checking website workspaces/repos.
 # Find all node hash (sha1) files without an associated backup (bu) marker file.
-find "$wdir/" -type f -regex '.*/\(dms\|website\)/.*\.xml\.\(sha1\|bu\)' |
+find "$wdir/" -type f -regex '.*/\(website\)/.*\.xml\.\(sha1\|bu\)' |
   sort |
   awk 'BEGIN {RS = ".xml.sha1\n"; FS = ".xml.bu\n"} {if (NF == 1) print $1} { if (NF > 1 && $(NF -1) != $NF && $NF != "") print $NF}' > "$wdir/files-removed"
 if [ -s "$wdir/files-removed" ]; then
