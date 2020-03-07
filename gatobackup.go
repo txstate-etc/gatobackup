@@ -294,10 +294,8 @@ func saveErrors(name string) (*log.Logger, error) {
 
 // Example usage:
 // # Setup environment
-// cd $HOME/staging/edit/
-// mkdir -p data/{config,dms,removed,usergroups,userroles,users,website}
-// ln -s /mnt/nfs/versions/gato/staging/edit/ versions
-// mkdir -p versions/{config,dms,removed,usergroups,userroles,users,website}
+// cd /mnt/nfs/versions/gato/edit/
+// mkdir -p ./{config,dms,removed,usergroups,userroles,users,website}
 // # then run within new directory
 // echo -e 'website,testing\nusers,admin.testing' | ./gatobackup --split --stamp=2015-07-31 url1,session1 url2,session2
 func main() {
@@ -309,15 +307,15 @@ func main() {
 
 	// Setup logging to maintain failed save nodes.
 	var err error
-	eSave, err = saveErrors(dirBase + "/save.failed")
+	eSave, err = saveErrors(dirBase + "/.metadata/save.failed")
 	if err != nil {
 		log.Fatal("ERROR: not able to save errors in 'save.failed' file -- ", err)
 	}
 
 	// Get functions
-	openStore = openStoreFunc(dirBase+"/data", stamp)
-	getHash = getHashFunc(dirBase + "/registry")
-	putHash = putHashFunc(dirBase + "/registry")
+	openStore = openStoreFunc(dirBase, stamp)
+	getHash = getHashFunc(dirBase + "/.metadata/registry")
+	putHash = putHashFunc(dirBase + "/.metadata/registry")
 	qNode, qClose, err := queue(flag.Args(), sessionSplitHash, sessionGroupSize, sessionQueueSize)
 	if err != nil {
 		log.Fatal("ERROR: [main] Unable to setup session channel(s) -- ", err)
